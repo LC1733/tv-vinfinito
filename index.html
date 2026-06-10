@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>TV V∞ · Noticias + Liminal</title>
+<style>
+:root {
+  --primary: #00ff88;
+  --primary-dark: #00cc6d;
+  --bg: #0e0e10;
+  --bg-light: #1c1c20;
+  --bg-lighter: #252529;
+  --text: #e0e0e0;
+  --error: #ff5555;
+  --warning: #ffb86c;
+  --success: #50fa7b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+  line-height: 1.6;
+  padding: 16px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1100px;
+  margin: 20px auto;
+  padding: 24px;
+  border: 1px solid var(--primary);
+  border-radius: 24px;
+  background: linear-gradient(145deg, #1c1c20, #0f0f12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+h1 {
+  text-align: center;
+  margin: 0 0 20px;
+  color: var(--primary);
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+  font-size: 1.8rem;
+  position: relative;
+  padding-bottom: 10px;
+}
+
+h1::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  border-radius: 3px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 20px 0;
+  align-items: center;
+}
+
+button, select {
+  background: var(--bg-light);
+  border: 1px solid var(--primary);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 40px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+button { display: flex; align-items: center; gap: 6px; }
+
+button:hover:not(:disabled) {
+  background: var(--primary-dark);
+  color: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 255, 136, 0.3);
+}
+
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.screen {
+  position: relative;
+  aspect-ratio: 16/9;
+  background: #000;
+  border: 3px solid #333;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+  margin-bottom: 16px;
+}
+
+video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 14, 16, 0.9);
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 1rem;
+  gap: 16px;
+  transition: opacity 0.3s ease;
+  z-index: 10;
+  text-align: center;
+  padding: 20px;
+}
+
+.overlay.hidden { opacity: 0; pointer-events: none; }
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(0, 255, 136, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.liminal-question {
+  font-size: 0.85rem;
+  color: #ffcc88;
+  max-width: 80%;
+  font-style: italic;
+}
+
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 16px;
+  background: var(--bg-light);
+  border-radius: 60px;
+  font-size: 0.75rem;
+}
+
+.connection-status { display: flex; align-items: center; gap: 8px; }
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.status-dot.good { background: var(--success); }
+.status-dot.bad { background: var(--error); animation: pulse 1.5s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.quality-selector {
+  background: var(--bg-lighter);
+  border-radius: 60px;
+  padding: 4px 12px;
+  font-size: 0.7rem;
+}
+
+.log {
+  font: 12px/1.4 monospace;
+  background: var(--bg-light);
+  border-radius: 20px;
+  padding: 12px;
+  max-height: 180px;
+  overflow: auto;
+  margin-top: 16px;
+  scrollbar-width: thin;
+}
+
+.log-entry {
+  margin-bottom: 6px;
+  padding-left: 18px;
+  position: relative;
+}
+
+.log-entry::before {
+  content: "›";
+  position: absolute;
+  left: 0;
+  color: var(--primary);
+}
+
+.log-entry.error { color: var(--error); }
+.log-entry.warning { color: var(--warning); }
+.log-entry.success { color: var(--success); }
+
+.notification {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: var(--bg-light);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 40px;
+  border-left: 4px solid var(--primary);
+  z-index: 1000;
+  opacity: 0;
+  transition: 0.3s;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.notification.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+footer {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 0.68rem;
+  color: #777;
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .wrap { padding: 16px; }
+  .controls { flex-direction: column; }
+  button, select { width: 100%; justify-content: center; }
+  .status-bar { flex-direction: column; align-items: stretch; }
+  .notification { white-space: normal; text-align: center; width: 90%; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📡 TV V∞ · Noticias + Liminal</h1>
+
+  <div class="controls">
+    <button id="prev">⬅️ Anterior</button>
+    <select id="selector"></select>
+    <button id="next">Siguiente ➡️</button>
+    <button id="audio">🔇 Silencio</button>
+    <button id="test">🧪 Probar todos</button>
+    <button id="fs">🖥️ Pantalla completa</button>
+  </div>
+
+  <div class="screen">
+    <video id="player" controls playsinline muted
+      poster="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='100%25' height='100%25' fill='%23000'/%3E%3Ctext x='50%25' y='50%25' fill='%2300ff88' dy='0.35em' text-anchor='middle'%3EClic para iniciar%3C/text%3E%3C/svg%3E">
+    </video>
+    <div class="overlay" id="overlay">
+      <div class="loading-spinner"></div>
+      <div id="overlayMsg">Cargando canal...</div>
+      <div class="liminal-question" id="liminalQuestion"></div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div id="info">Canal: —</div>
+    <div class="connection-status">
+      <div class="status-dot" id="status-dot"></div>
+      <div id="connection-info">Conectando...</div>
+    </div>
+    <div id="latency">⏱️ latencia: --s</div>
+    <div class="quality-selector">
+      <label>🎛️ Calidad: </label>
+      <select id="qualitySelect" disabled>
+        <option value="auto">Automática</option>
+      </select>
+    </div>
+    <div id="clock">--:--:--</div>
+  </div>
+
+  <div class="log" id="log"></div>
+
+  <footer id="footer"></footer>
+</div>
+<div class="notification" id="notification"></div>
+
+<script>
+/* ============================================================
+   CANALES — URLs verificadas contra iptv-org (junio 2026).
+   Cada canal tiene un array `srcs` con fallbacks en orden.
+   Cambios vs versión anterior:
+   - NHK: nueva URL oficial (la akamaized antigua quedó muerta)
+   - DW: master.m3u8 (index.m3u8 deprecado) + fallback amagi
+   - Al Jazeera: nuevos endpoints getaj.net + fallbacks
+   - CGTN Español: stream público descontinuado → CGTN English
+   - NASA TV: descontinuado (reemplazado por NASA+ sin HLS
+     público) → reemplazado por T13 Chile
+   ============================================================ */
+const CHANNELS = [
+  {label:'🇫🇷 France 24 (EN)', srcs:[
+    'https://live.france24.com/hls/live/2037218-b/F24_EN_HI_HLS/master_2300.m3u8',
+    'https://live.france24.com/hls/live/2037218/F24_EN_HI_HLS/master_2300.m3u8',
+    'https://live.france24.com/hls/live/2037218-b/F24_EN_HI_HLS/master_900.m3u8'
+  ]},
+  {label:'🇯🇵 NHK World Japan', srcs:[
+    'https://masterpl.hls.nhkworld.jp/hls/w/live/smarttv.m3u8',
+    'https://media-tyo.hls.nhkworld.jp/hls/w/live/master.m3u8'
+  ]},
+  {label:'🇩🇪 DW News (EN)', srcs:[
+    'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8',
+    'https://amg01644-amg01644c1-amgplt0343.playout.now3.amagi.tv/ts-eu-w1-n2/playlist/amg01644-amg01644c1-amgplt0343/playlist.m3u8',
+    'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8'
+  ]},
+  {label:'🇩🇪 DW Español', srcs:[
+    'https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8'
+  ]},
+  {label:'🇶🇦 Al Jazeera (EN)', srcs:[
+    'https://live-hls-apps-aje-fa.getaj.net/AJE/index.m3u8',
+    'https://live-hls-apps-aje-v3-fa.getaj.net/AJE/index.m3u8',
+    'https://live-hls-web-aje-fa.thehlive.com/AJE/index.m3u8',
+    'https://live-hls-web-aje.getaj.net/AJE/index.m3u8'
+  ]},
+  {label:'🇹🇷 TRT World (EN)', srcs:[
+    'https://tv-trtworld.medya.trt.com.tr/master.m3u8'
+  ]},
+  {label:'🇨🇳 CGTN (EN)', srcs:[
+    'https://english-livebkali.cgtn.com/live/encgtn.m3u8',
+    'https://amg00405-rakutentv-cgtn-rakuten-i9tar.amagi.tv/master.m3u8'
+  ]},
+  {label:'🇪🇸 RTVE 24h (ES)', srcs:[
+    'https://ztnr.rtve.es/ztnr/1694255.m3u8'
+  ]},
+  {label:'🇨🇱 T13 (CL)', srcs:[
+    'https://jireh-2-hls-video-us-isp.dps.live/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/t13/t13.smil/playlist.m3u8'
+  ]},
+  {label:'🇨🇱 TV Senado (CL)', srcs:[
+    'https://janus-tv-ply.senado.cl/playlist/playlist.m3u8'
+  ]},
+  {label:'🇨🇱 Cámara Diputados (CL)', srcs:[
+    'https://camara.03.cl.cdnz.cl/camara19/live/playlist.m3u8'
+  ]}
+];
+
+let current = 1;
+let hls = null;
+let isTesting = false;
+let playToken = 0;            // invalida cargas anteriores al cambiar de canal
+let consecutiveFails = 0;     // corta el bucle infinito si todo falla
+let latencyInterval = null;
+let questionInterval = null;
+
+try {
+  const saved = parseInt(localStorage.getItem('lastChannel'));
+  if (saved >= 1 && saved <= CHANNELS.length) current = saved;
+} catch(e) { /* localStorage no disponible: continuar */ }
+
+const $ = sel => document.querySelector(sel);
+const player = $('#player');
+const selector = $('#selector');
+const overlay = $('#overlay');
+const overlayMsg = $('#overlayMsg');
+const info = $('#info');
+const logBox = $('#log');
+const statusDot = $('#status-dot');
+const connectionInfo = $('#connection-info');
+const latencySpan = $('#latency');
+const qualitySelect = $('#qualitySelect');
+const liminalDiv = $('#liminalQuestion');
+
+const preguntasLiminales = [
+  "¿Qué no estás viendo mientras ves esto?",
+  "¿Qué canal elegirías si ninguno existiera?",
+  "¿La noticia te elige a ti o tú a ella?",
+  "¿Qué pasaría si el silencio fuera el único canal?",
+  "¿Estás viendo o siendo visto?",
+  "¿Qué imagen falta en este flujo?",
+  "¿Cuánto de lo que ves es espera?",
+  "¿Y si el retraso fuera el mensaje?"
+];
+
+const randomQuestion = () =>
+  preguntasLiminales[Math.floor(Math.random() * preguntasLiminales.length)];
+
+function startLiminalQuestions() {
+  if (questionInterval) clearInterval(questionInterval);
+  liminalDiv.innerText = randomQuestion();
+  questionInterval = setInterval(() => {
+    if (!overlay.classList.contains('hidden')) liminalDiv.innerText = randomQuestion();
+  }, 8000);
+}
+
+function stopLiminalQuestions() {
+  if (questionInterval) clearInterval(questionInterval);
+  liminalDiv.innerText = "";
+}
+
+function showNotification(msg, type='info', duration=3000) {
+  const n = $('#notification');
+  n.textContent = msg;
+  n.style.borderLeftColor = type === 'error' ? 'var(--error)' : (type === 'success' ? 'var(--success)' : 'var(--primary)');
+  n.classList.add('show');
+  setTimeout(() => n.classList.remove('show'), duration);
+}
+
+function log(msg, type='info') {
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  logBox.prepend(entry);
+  if (logBox.children.length > 50) logBox.removeChild(logBox.lastChild);
+}
+
+function updateConnectionStatus(status, msg) {
+  statusDot.className = 'status-dot';
+  if (status === 'good') {
+    statusDot.classList.add('good');
+    connectionInfo.textContent = 'Buena conexión';
+  } else if (status === 'bad') {
+    statusDot.classList.add('bad');
+    connectionInfo.textContent = msg || 'Problemas';
+  } else {
+    connectionInfo.textContent = 'Conectando...';
+  }
+}
+
+function destroyHls() {
+  if (hls) {
+    try { hls.destroy(); } catch(e) {}
+    hls = null;
+  }
+  if (latencyInterval) clearInterval(latencyInterval);
+  latencySpan.textContent = '⏱️ latencia: --s';
+  qualitySelect.disabled = true;
+  qualitySelect.innerHTML = '<option value="auto">Automática</option>';
+}
+
+const canNative = () =>
+  player.canPlayType('application/vnd.apple.mpegurl') !== '';
+
+let hlsLibPromise = null;
+function ensureHls() {
+  if (window.Hls) return Promise.resolve(true);
+  if (hlsLibPromise) return hlsLibPromise;
+  hlsLibPromise = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => { hlsLibPromise = null; resolve(false); };
+    document.head.appendChild(script);
+  });
+  return hlsLibPromise;
+}
+
+function startLatencyMonitor() {
+  if (latencyInterval) clearInterval(latencyInterval);
+  latencyInterval = setInterval(() => {
+    if (player && player.buffered.length > 0) {
+      const bufferedEnd = player.buffered.end(player.buffered.length - 1);
+      const bufferHealth = Math.max(0, bufferedEnd - player.currentTime);
+      latencySpan.textContent = bufferHealth > 0
+        ? `⏱️ buffer: ${Math.min(bufferHealth, 10).toFixed(1)}s`
+        : '⏱️ latencia: --s';
+    } else {
+      latencySpan.textContent = '⏱️ latencia: --s';
+    }
+  }, 2000);
+}
+
+/* ---------- Intento de reproducción de UNA URL ----------
+   Devuelve true si el video llega a reproducir frames,
+   false si falla o expira el timeout. ---------- */
+function tryUrl(src, token, timeoutMs = 12000) {
+  return new Promise(async (resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(ok);
+    };
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+
+    const onPlaying = () => finish(true);
+    const onError = () => finish(false);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      player.removeEventListener('playing', onPlaying);
+      player.removeEventListener('error', onError);
+    };
+
+    if (token !== playToken) return finish(false);
+
+    player.addEventListener('playing', onPlaying);
+    player.addEventListener('error', onError);
+
+    try {
+      if (canNative()) {
+        player.src = src;
+        await player.play().catch(()=>{});
+      } else {
+        const ok = await ensureHls();
+        if (!ok || !Hls.isSupported()) return finish(false);
+        destroyHls();
+        hls = new Hls({ enableWorker: true, lowLatencyMode: false,
+                        manifestLoadingTimeOut: 8000,
+                        fragLoadingTimeOut: 10000 });
+        hls.loadSource(src);
+        hls.attachMedia(player);
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          if (token !== playToken) return;
+          qualitySelect.disabled = false;
+          qualitySelect.innerHTML = '<option value="auto">Automática</option>';
+          data.levels.forEach((level, idx) => {
+            const label = level.height ? `${level.height}p` : `${Math.round(level.bitrate/1000)} kbps`;
+            qualitySelect.innerHTML += `<option value="${idx}">${label}</option>`;
+          });
+          qualitySelect.onchange = () => {
+            if (!hls) return;
+            hls.currentLevel = qualitySelect.value === 'auto' ? -1 : parseInt(qualitySelect.value);
+          };
+          player.play().catch(()=>{});
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (!data.fatal) return;
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && hls) {
+            hls.recoverMediaError();
+          } else {
+            finish(false);
+          }
+        });
+      }
+    } catch(e) {
+      finish(false);
+    }
+  });
+}
+
+/* ---------- Carga del canal actual con fallbacks ---------- */
+async function playCurrent() {
+  const token = ++playToken;
+  const channel = CHANNELS[current - 1];
+  selector.value = current;
+  info.textContent = `Canal: ${channel.label}`;
+  overlay.classList.remove('hidden');
+  overlayMsg.textContent = 'Cargando canal...';
+  startLiminalQuestions();
+  destroyHls();
+  player.pause();
+  player.removeAttribute('src');
+  player.load();
+  updateConnectionStatus('unknown');
+  log(`Cargando: ${channel.label}`, 'info');
+
+  let success = false;
+  for (let i = 0; i < channel.srcs.length; i++) {
+    if (token !== playToken) return; // el usuario cambió de canal
+    if (i > 0) {
+      overlayMsg.textContent = `Probando fuente alternativa ${i + 1}/${channel.srcs.length}...`;
+      log(`Fallback ${i + 1} para ${channel.label}`, 'warning');
+      destroyHls();
+      player.removeAttribute('src');
+      player.load();
+    }
+    success = await tryUrl(channel.srcs[i], token);
+    if (success) break;
+  }
+
+  if (token !== playToken) return;
+
+  if (success) {
+    consecutiveFails = 0;
+    updateConnectionStatus('good');
+    log(`Reproduciendo: ${channel.label}`, 'success');
+    try { localStorage.setItem('lastChannel', current); } catch(e) {}
+    startLatencyMonitor();
+    overlay.classList.add('hidden');
+    stopLiminalQuestions();
+  } else {
+    updateConnectionStatus('bad', 'Canal no disponible');
+    log(`Sin fuentes disponibles: ${channel.label}`, 'error');
+    stopLiminalQuestions();
+    consecutiveFails++;
+    if (!isTesting && consecutiveFails < CHANNELS.length) {
+      showNotification(`${channel.label} no disponible, siguiente...`, 'error');
+      next();
+    } else if (consecutiveFails >= CHANNELS.length) {
+      overlayMsg.textContent = '⚠️ Ningún canal disponible. Revisa tu conexión.';
+      log('Todos los canales fallaron. Deteniendo auto-avance.', 'error');
+    }
+  }
+}
+
+function next() {
+  current = (current % CHANNELS.length) + 1;
+  showNotification(`Siguiente: ${CHANNELS[current-1].label}`);
+  playCurrent();
+}
+function prev() {
+  current = (current - 2 + CHANNELS.length) % CHANNELS.length + 1;
+  showNotification(`Anterior: ${CHANNELS[current-1].label}`);
+  playCurrent();
+}
+
+$('#prev').addEventListener('click', () => { consecutiveFails = 0; prev(); });
+$('#next').addEventListener('click', () => { consecutiveFails = 0; next(); });
+selector.addEventListener('change', () => {
+  consecutiveFails = 0;
+  current = parseInt(selector.value);
+  showNotification(`Cambiando a: ${CHANNELS[current-1].label}`);
+  playCurrent();
+});
+$('#audio').addEventListener('click', () => {
+  player.muted = !player.muted;
+  $('#audio').innerHTML = player.muted ? '🔇 Silencio' : '🔊 Audio';
+  showNotification(player.muted ? 'Audio silenciado' : 'Audio activado');
+});
+$('#fs').addEventListener('click', () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+document.addEventListener('click', () => {
+  if (!overlay.classList.contains('hidden')) player.play().catch(()=>{});
+});
+
+$('#test').addEventListener('click', async () => {
+  isTesting = true;
+  consecutiveFails = 0;
+  const btn = $('#test');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Probando...';
+  log('🧪 Iniciando prueba de canales', 'info');
+  for (let i = 1; i <= CHANNELS.length; i++) {
+    current = i;
+    await playCurrent();
+    // playCurrent ya esperó la confirmación de 'playing' o el timeout
+    const works = player.readyState >= 2 && !player.error && !player.paused;
+    selector.options[i-1].textContent = CHANNELS[i-1].label + (works ? ' ✅' : ' ❌');
+    log(`Canal ${i}: ${works ? 'OK' : 'falla'}`, works ? 'success' : 'error');
+  }
+  log('🧪 Prueba finalizada', 'info');
+  showNotification('Prueba completada', 'success');
+  btn.disabled = false;
+  btn.innerHTML = '🧪 Probar todos';
+  isTesting = false;
+  current = 1;
+  playCurrent();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === 'ArrowRight') { consecutiveFails = 0; next(); }
+  if (e.key === 'ArrowLeft')  { consecutiveFails = 0; prev(); }
+  if (e.key === ' ') { e.preventDefault(); player.paused ? player.play() : player.pause(); }
+  if (e.key === 'm') { player.muted = !player.muted; showNotification(player.muted ? 'Silencio' : 'Audio activado'); }
+  if (e.key === 'f') document.documentElement.requestFullscreen();
+});
+
+// Inicializar selector
+CHANNELS.forEach((c, i) => {
+  const opt = document.createElement('option');
+  opt.value = i + 1;
+  opt.textContent = c.label;
+  selector.appendChild(opt);
+});
+selector.value = current;
+
+setInterval(() => $('#clock').textContent = new Date().toLocaleTimeString(), 1000);
+
+// Footer dinámico
+$('#footer').textContent = `© ${new Date().getFullYear()} Luis Cartes Henríquez · Creación original protegida — Convenio de Berna / OMPI · Prohibida su reproducción, adaptación o uso en entrenamiento de IA sin autorización expresa.`;
+
+playCurrent();
+</script>
+</body>
+</html>
