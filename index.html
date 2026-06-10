@@ -70,11 +70,11 @@ h1::after {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
-  margin: 20px 0;
+  margin: 14px 0;
   align-items: center;
 }
 
-button, select {
+button, select, input[type="search"] {
   background: var(--bg-light);
   border: 1px solid var(--primary);
   color: var(--text);
@@ -86,6 +86,8 @@ button, select {
   outline: none;
 }
 
+input[type="search"] { cursor: text; min-width: 180px; }
+
 button { display: flex; align-items: center; gap: 6px; }
 
 button:hover:not(:disabled) {
@@ -96,6 +98,29 @@ button:hover:not(:disabled) {
 }
 
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.cat-btn {
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  border-radius: 30px;
+  background: var(--bg-lighter);
+  border: 1px solid #444;
+}
+
+.cat-btn.active {
+  background: var(--primary);
+  color: #000;
+  border-color: var(--primary);
+  font-weight: 700;
+}
 
 .screen {
   position: relative;
@@ -250,8 +275,7 @@ footer {
 
 @media (max-width: 700px) {
   .wrap { padding: 16px; }
-  .controls { flex-direction: column; }
-  button, select { width: 100%; justify-content: center; }
+  .controls button, .controls select, .controls input { flex: 1 1 45%; justify-content: center; }
   .status-bar { flex-direction: column; align-items: stretch; }
   .notification { white-space: normal; text-align: center; width: 90%; }
 }
@@ -261,13 +285,16 @@ footer {
 <div class="wrap">
   <h1>📡 TV V∞ · Noticias + Liminal</h1>
 
+  <div class="cats" id="cats"></div>
+
   <div class="controls">
-    <button id="prev">⬅️ Anterior</button>
+    <button id="prev">⬅️</button>
     <select id="selector"></select>
-    <button id="next">Siguiente ➡️</button>
+    <button id="next">➡️</button>
+    <input type="search" id="search" placeholder="🔍 Buscar canal..."/>
     <button id="audio">🔇 Silencio</button>
-    <button id="test">🧪 Probar todos</button>
-    <button id="fs">🖥️ Pantalla completa</button>
+    <button id="test">🧪 Probar</button>
+    <button id="fs">🖥️</button>
   </div>
 
   <div class="screen">
@@ -289,9 +316,9 @@ footer {
     </div>
     <div id="latency">⏱️ latencia: --s</div>
     <div class="quality-selector">
-      <label>🎛️ Calidad: </label>
+      <label>🎛️ </label>
       <select id="qualitySelect" disabled>
-        <option value="auto">Automática</option>
+        <option value="auto">Auto</option>
       </select>
     </div>
     <div id="clock">--:--:--</div>
@@ -306,72 +333,169 @@ footer {
 <script>
 /* ============================================================
    CANALES — URLs verificadas contra iptv-org (junio 2026).
-   Cada canal tiene un array `srcs` con fallbacks en orden.
-   Cambios vs versión anterior:
-   - NHK: nueva URL oficial (la akamaized antigua quedó muerta)
-   - DW: master.m3u8 (index.m3u8 deprecado) + fallback amagi
-   - Al Jazeera: nuevos endpoints getaj.net + fallbacks
-   - CGTN Español: stream público descontinuado → CGTN English
-   - NASA TV: descontinuado (reemplazado por NASA+ sin HLS
-     público) → reemplazado por T13 Chile
+   Cada canal: { label, cat, srcs[] } con fallbacks en orden.
+   Solo https (GitHub Pages bloquea http por mixed content).
    ============================================================ */
 const CHANNELS = [
-  {label:'🇫🇷 France 24 (EN)', srcs:[
+  // ───────── INTERNACIONAL (EN) ─────────
+  {cat:'Mundo', label:'🇫🇷 France 24 (EN)', srcs:[
     'https://live.france24.com/hls/live/2037218-b/F24_EN_HI_HLS/master_2300.m3u8',
     'https://live.france24.com/hls/live/2037218/F24_EN_HI_HLS/master_2300.m3u8',
     'https://live.france24.com/hls/live/2037218-b/F24_EN_HI_HLS/master_900.m3u8'
   ]},
-  {label:'🇯🇵 NHK World Japan', srcs:[
-    'https://masterpl.hls.nhkworld.jp/hls/w/live/smarttv.m3u8',
-    'https://media-tyo.hls.nhkworld.jp/hls/w/live/master.m3u8'
-  ]},
-  {label:'🇩🇪 DW News (EN)', srcs:[
+  {cat:'Mundo', label:'🇩🇪 DW News (EN)', srcs:[
     'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8',
-    'https://amg01644-amg01644c1-amgplt0343.playout.now3.amagi.tv/ts-eu-w1-n2/playlist/amg01644-amg01644c1-amgplt0343/playlist.m3u8',
-    'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/index.m3u8'
+    'https://amg01644-amg01644c1-amgplt0343.playout.now3.amagi.tv/ts-eu-w1-n2/playlist/amg01644-amg01644c1-amgplt0343/playlist.m3u8'
   ]},
-  {label:'🇩🇪 DW Español', srcs:[
-    'https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8'
-  ]},
-  {label:'🇶🇦 Al Jazeera (EN)', srcs:[
+  {cat:'Mundo', label:'🇶🇦 Al Jazeera (EN)', srcs:[
     'https://live-hls-apps-aje-fa.getaj.net/AJE/index.m3u8',
     'https://live-hls-apps-aje-v3-fa.getaj.net/AJE/index.m3u8',
     'https://live-hls-web-aje-fa.thehlive.com/AJE/index.m3u8',
     'https://live-hls-web-aje.getaj.net/AJE/index.m3u8'
   ]},
-  {label:'🇹🇷 TRT World (EN)', srcs:[
+  {cat:'Mundo', label:'🇹🇷 TRT World (EN)', srcs:[
     'https://tv-trtworld.medya.trt.com.tr/master.m3u8'
   ]},
-  {label:'🇨🇳 CGTN (EN)', srcs:[
+  {cat:'Mundo', label:'🇺🇸 Bloomberg TV', srcs:[
+    'https://bloomberg.com/media-manifest/streams/us.m3u8',
+    'https://bloomberg.com/media-manifest/streams/phoenix-us.m3u8'
+  ]},
+  {cat:'Mundo', label:'🇺🇸 NBC News NOW', srcs:[
+    'https://d1bl6tskrpq9ze.cloudfront.net/hls/master.m3u8?ads.xumo_channelId=99984003'
+  ]},
+  {cat:'Mundo', label:'🇦🇺 ABC News (AU)', srcs:[
+    'https://abc-news-dmd-streams-1.akamaized.net/out/v1/701126012d044971b3fa89406a440133/index.m3u8'
+  ]},
+  {cat:'Mundo', label:'🇦🇺 Sky News Extra', srcs:[
+    'https://skynewsau-live.akamaized.net/hls/live/2002691/skynewsau-extra3/master.m3u8',
+    'https://skynewsau-live.akamaized.net/hls/live/2002689/skynewsau-extra1/master.m3u8'
+  ]},
+  {cat:'Mundo', label:'🇮🇹 Rai News 24', srcs:[
+    'https://rainews1-live.akamaized.net/hls/live/598326/rainews1/rainews1/playlist.m3u8'
+  ]},
+  {cat:'Mundo', label:'🇮🇱 i24 News (EN)', srcs:[
+    'https://bcovlive-a.akamaihd.net/ecf224f43f3b43e69471a7b626481af0/eu-central-1/5377161796001/playlist.m3u8'
+  ]},
+
+  // ───────── ASIA ─────────
+  {cat:'Asia', label:'🇯🇵 NHK World Japan', srcs:[
+    'https://masterpl.hls.nhkworld.jp/hls/w/live/smarttv.m3u8',
+    'https://media-tyo.hls.nhkworld.jp/hls/w/live/master.m3u8'
+  ]},
+  {cat:'Asia', label:'🇨🇳 CGTN (EN)', srcs:[
     'https://english-livebkali.cgtn.com/live/encgtn.m3u8',
     'https://amg00405-rakutentv-cgtn-rakuten-i9tar.amagi.tv/master.m3u8'
   ]},
-  {label:'🇪🇸 RTVE 24h (ES)', srcs:[
+  {cat:'Asia', label:'🇰🇷 Arirang TV', srcs:[
+    'https://amdlive-ch01-ctnd-com.akamaized.net/arirang_1ch/smil:arirang_1ch.smil/playlist.m3u8'
+  ]},
+  {cat:'Asia', label:'🇮🇳 NDTV 24x7', srcs:[
+    'https://ndtv24x7elemarchana.akamaized.net/hls/live/2003678/ndtv24x7/master.m3u8'
+  ]},
+  {cat:'Asia', label:'🇮🇳 WION', srcs:[
+    'https://d7x8z4yuq42qn.cloudfront.net/index_7.m3u8'
+  ]},
+  {cat:'Asia', label:'🇸🇬 CNA Originals', srcs:[
+    'https://amg01082-cna-amg01082c1-rlaxx-us-11304.playouts.now.amagi.tv/playlist.m3u8',
+    'https://amg01082-cna-amg01082c1-vidaa-gb-7580.playouts.now.amagi.tv/playlist.m3u8'
+  ]},
+
+  // ───────── ESPAÑOL ─────────
+  {cat:'Español', label:'🇫🇷 France 24 Español', srcs:[
+    'https://live.france24.com/hls/live/2037220-b/F24_ES_HI_HLS/master_2300.m3u8',
+    'https://live.france24.com/hls/live/2037220/F24_ES_HI_HLS/master_2300.m3u8',
+    'https://live.france24.com/hls/live/2037220-b/F24_ES_HI_HLS/master_900.m3u8'
+  ]},
+  {cat:'Español', label:'🇩🇪 DW Español', srcs:[
+    'https://dwamdstream104.akamaized.net/hls/live/2015530/dwstream104/master.m3u8'
+  ]},
+  {cat:'Español', label:'🇪🇸 RTVE 24h', srcs:[
     'https://ztnr.rtve.es/ztnr/1694255.m3u8'
   ]},
-  {label:'🇨🇱 T13 (CL)', srcs:[
+  {cat:'Español', label:'🇪🇸 Negocios TV', srcs:[
+    'https://streaming013.gestec-video.com/hls/negociostv.m3u8'
+  ]},
+
+  // ───────── CHILE ─────────
+  {cat:'Chile', label:'🇨🇱 T13', srcs:[
     'https://jireh-2-hls-video-us-isp.dps.live/hls-video/10b92cafdf3646cbc1e727f3dc76863621a327fd/t13/t13.smil/playlist.m3u8'
   ]},
-  {label:'🇨🇱 TV Senado (CL)', srcs:[
+  {cat:'Chile', label:'🇨🇱 13C', srcs:[
+    'https://origin.dpsgo.com/ssai/event/GI-9cp_bT8KcerLpZwkuhw/master.m3u8'
+  ]},
+  {cat:'Chile', label:'🇨🇱 Meganoticias', srcs:[
+    'https://ythls.armelin.one/channel/UCkccyEbqhhM3uKOI6Shm-4Q.m3u8'
+  ]},
+  {cat:'Chile', label:'🇨🇱 UCV TV', srcs:[
+    'https://unlimited2-cl-isp.dps.live/ucvtv2/ucvtv2.smil/playlist.m3u8'
+  ]},
+  {cat:'Chile', label:'🇨🇱 TV Senado', srcs:[
     'https://janus-tv-ply.senado.cl/playlist/playlist.m3u8'
   ]},
-  {label:'🇨🇱 Cámara Diputados (CL)', srcs:[
+  {cat:'Chile', label:'🇨🇱 Cámara Diputados', srcs:[
     'https://camara.03.cl.cdnz.cl/camara19/live/playlist.m3u8'
+  ]},
+
+  // ───────── PERÚ ─────────
+  {cat:'Perú', label:'🇵🇪 TV Perú Noticias', srcs:[
+    'https://cdnhd.iblups.com/hls/902c1a0395264f269f1160efa00660e47.m3u8'
+  ]},
+  {cat:'Perú', label:'🇵🇪 TV Perú', srcs:[
+    'https://cdnhd.iblups.com/hls/777b4d4cc0984575a7d14f6ee57dbcaf7.m3u8',
+    'https://cdnhd.iblups.com/hls/ee2450c81e554f4cae0e6292106993c27.m3u8'
+  ]},
+  {cat:'Perú', label:'🇵🇪 Latina', srcs:[
+    'https://redirector.rudo.video/hls-video/567ffde3fa319fadf3419efda25619456231dfea/latina/latina.smil/playlist.m3u8'
+  ]},
+  {cat:'Perú', label:'🇵🇪 RPP TV', srcs:[
+    'https://cdn-ssai.smartbit.co/rpp/index.m3u8'
+  ]},
+  {cat:'Perú', label:'🇵🇪 Exitosa TV', srcs:[
+    'https://luna-4-video.mediaserver.digital/exitosatv_233b-4b49-a726-5a451262/index.m3u8'
+  ]},
+
+  // ───────── LATAM ─────────
+  {cat:'Latam', label:'🇦🇷 A24', srcs:[
+    'https://g5.vxral-slo.transport.edge-access.net/a12/ngrp:a24-100056_all/playlist.m3u8?sense=true'
+  ]},
+  {cat:'Latam', label:'🇧🇷 Record News', srcs:[
+    'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8'
+  ]},
+  {cat:'Latam', label:'🇲🇽 ADN 40', srcs:[
+    'https://mdstrm.com/live-stream-playlist/60b578b060947317de7b57ac.m3u8'
+  ]},
+
+  // ───────── ÁRABE ─────────
+  {cat:'Árabe', label:'🇶🇦 Al Jazeera Arabic', srcs:[
+    'https://live-hls-v3-aja.getaj.net/AJA-V3/index.m3u8',
+    'https://live-hls-apps-aja-fa.getaj.net/AJA/01.m3u8'
+  ]},
+  {cat:'Árabe', label:'🇦🇪 Al Arabiya', srcs:[
+    'https://live.alarabiya.net/alarabiapublish/alarabiya.smil/playlist.m3u8'
+  ]},
+  {cat:'Árabe', label:'🇦🇪 Sky News Arabia', srcs:[
+    'https://live-stream.skynewsarabia.com/c-horizontal-channel/horizontal-stream/index.m3u8',
+    'https://stream.skynewsarabia.com/ott/ott.m3u8'
   ]}
 ];
 
-let current = 1;
+const CATS = ['Todos', ...new Set(CHANNELS.map(c => c.cat))];
+
+let activeCat = 'Todos';
+let searchTerm = '';
+let current = 0;              // índice en CHANNELS (0-based)
 let hls = null;
 let isTesting = false;
-let playToken = 0;            // invalida cargas anteriores al cambiar de canal
-let consecutiveFails = 0;     // corta el bucle infinito si todo falla
+let playToken = 0;
+let consecutiveFails = 0;
 let latencyInterval = null;
 let questionInterval = null;
 
 try {
-  const saved = parseInt(localStorage.getItem('lastChannel'));
-  if (saved >= 1 && saved <= CHANNELS.length) current = saved;
-} catch(e) { /* localStorage no disponible: continuar */ }
+  const savedLabel = localStorage.getItem('lastChannelLabel');
+  const idx = CHANNELS.findIndex(c => c.label === savedLabel);
+  if (idx >= 0) current = idx;
+} catch(e) {}
 
 const $ = sel => document.querySelector(sel);
 const player = $('#player');
@@ -426,7 +550,7 @@ function log(msg, type='info') {
   entry.className = `log-entry ${type}`;
   entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
   logBox.prepend(entry);
-  if (logBox.children.length > 50) logBox.removeChild(logBox.lastChild);
+  if (logBox.children.length > 60) logBox.removeChild(logBox.lastChild);
 }
 
 function updateConnectionStatus(status, msg) {
@@ -450,7 +574,7 @@ function destroyHls() {
   if (latencyInterval) clearInterval(latencyInterval);
   latencySpan.textContent = '⏱️ latencia: --s';
   qualitySelect.disabled = true;
-  qualitySelect.innerHTML = '<option value="auto">Automática</option>';
+  qualitySelect.innerHTML = '<option value="auto">Auto</option>';
 }
 
 const canNative = () =>
@@ -485,9 +609,6 @@ function startLatencyMonitor() {
   }, 2000);
 }
 
-/* ---------- Intento de reproducción de UNA URL ----------
-   Devuelve true si el video llega a reproducir frames,
-   false si falla o expira el timeout. ---------- */
 function tryUrl(src, token, timeoutMs = 12000) {
   return new Promise(async (resolve) => {
     let settled = false;
@@ -528,7 +649,7 @@ function tryUrl(src, token, timeoutMs = 12000) {
         hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
           if (token !== playToken) return;
           qualitySelect.disabled = false;
-          qualitySelect.innerHTML = '<option value="auto">Automática</option>';
+          qualitySelect.innerHTML = '<option value="auto">Auto</option>';
           data.levels.forEach((level, idx) => {
             const label = level.height ? `${level.height}p` : `${Math.round(level.bitrate/1000)} kbps`;
             qualitySelect.innerHTML += `<option value="${idx}">${label}</option>`;
@@ -554,11 +675,49 @@ function tryUrl(src, token, timeoutMs = 12000) {
   });
 }
 
+/* ---------- Lista filtrada (categoría + búsqueda) ---------- */
+function filteredIndices() {
+  return CHANNELS.map((c, i) => ({c, i}))
+    .filter(({c}) => (activeCat === 'Todos' || c.cat === activeCat))
+    .filter(({c}) => c.label.toLowerCase().includes(searchTerm))
+    .map(({i}) => i);
+}
+
+function rebuildSelector() {
+  const idxs = filteredIndices();
+  selector.innerHTML = '';
+  idxs.forEach(i => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = CHANNELS[i].label;
+    selector.appendChild(opt);
+  });
+  if (idxs.includes(current)) selector.value = current;
+  else if (idxs.length) selector.value = idxs[0];
+}
+
+function rebuildCats() {
+  const box = $('#cats');
+  box.innerHTML = '';
+  CATS.forEach(cat => {
+    const b = document.createElement('button');
+    b.className = 'cat-btn' + (cat === activeCat ? ' active' : '');
+    const count = cat === 'Todos' ? CHANNELS.length : CHANNELS.filter(c => c.cat === cat).length;
+    b.textContent = `${cat} (${count})`;
+    b.onclick = () => {
+      activeCat = cat;
+      rebuildCats();
+      rebuildSelector();
+    };
+    box.appendChild(b);
+  });
+}
+
 /* ---------- Carga del canal actual con fallbacks ---------- */
 async function playCurrent() {
   const token = ++playToken;
-  const channel = CHANNELS[current - 1];
-  selector.value = current;
+  const channel = CHANNELS[current];
+  if (filteredIndices().includes(current)) selector.value = current;
   info.textContent = `Canal: ${channel.label}`;
   overlay.classList.remove('hidden');
   overlayMsg.textContent = 'Cargando canal...';
@@ -572,7 +731,7 @@ async function playCurrent() {
 
   let success = false;
   for (let i = 0; i < channel.srcs.length; i++) {
-    if (token !== playToken) return; // el usuario cambió de canal
+    if (token !== playToken) return;
     if (i > 0) {
       overlayMsg.textContent = `Probando fuente alternativa ${i + 1}/${channel.srcs.length}...`;
       log(`Fallback ${i + 1} para ${channel.label}`, 'warning');
@@ -590,7 +749,7 @@ async function playCurrent() {
     consecutiveFails = 0;
     updateConnectionStatus('good');
     log(`Reproduciendo: ${channel.label}`, 'success');
-    try { localStorage.setItem('lastChannel', current); } catch(e) {}
+    try { localStorage.setItem('lastChannelLabel', channel.label); } catch(e) {}
     startLatencyMonitor();
     overlay.classList.add('hidden');
     stopLiminalQuestions();
@@ -599,34 +758,41 @@ async function playCurrent() {
     log(`Sin fuentes disponibles: ${channel.label}`, 'error');
     stopLiminalQuestions();
     consecutiveFails++;
-    if (!isTesting && consecutiveFails < CHANNELS.length) {
+    const visibleCount = filteredIndices().length;
+    if (!isTesting && consecutiveFails < visibleCount) {
       showNotification(`${channel.label} no disponible, siguiente...`, 'error');
       next();
-    } else if (consecutiveFails >= CHANNELS.length) {
+    } else if (consecutiveFails >= visibleCount) {
       overlayMsg.textContent = '⚠️ Ningún canal disponible. Revisa tu conexión.';
-      log('Todos los canales fallaron. Deteniendo auto-avance.', 'error');
+      log('Todos los canales del filtro fallaron. Deteniendo auto-avance.', 'error');
     }
   }
 }
 
-function next() {
-  current = (current % CHANNELS.length) + 1;
-  showNotification(`Siguiente: ${CHANNELS[current-1].label}`);
+function moveBy(delta) {
+  const idxs = filteredIndices();
+  if (!idxs.length) return;
+  let pos = idxs.indexOf(current);
+  if (pos === -1) pos = 0;
+  else pos = (pos + delta + idxs.length) % idxs.length;
+  current = idxs[pos];
+  showNotification(CHANNELS[current].label);
   playCurrent();
 }
-function prev() {
-  current = (current - 2 + CHANNELS.length) % CHANNELS.length + 1;
-  showNotification(`Anterior: ${CHANNELS[current-1].label}`);
-  playCurrent();
-}
+const next = () => moveBy(1);
+const prev = () => moveBy(-1);
 
 $('#prev').addEventListener('click', () => { consecutiveFails = 0; prev(); });
 $('#next').addEventListener('click', () => { consecutiveFails = 0; next(); });
 selector.addEventListener('change', () => {
   consecutiveFails = 0;
   current = parseInt(selector.value);
-  showNotification(`Cambiando a: ${CHANNELS[current-1].label}`);
+  showNotification(`Cambiando a: ${CHANNELS[current].label}`);
   playCurrent();
+});
+$('#search').addEventListener('input', (e) => {
+  searchTerm = e.target.value.toLowerCase().trim();
+  rebuildSelector();
 });
 $('#audio').addEventListener('click', () => {
   player.muted = !player.muted;
@@ -647,26 +813,32 @@ $('#test').addEventListener('click', async () => {
   const btn = $('#test');
   btn.disabled = true;
   btn.innerHTML = '⏳ Probando...';
-  log('🧪 Iniciando prueba de canales', 'info');
-  for (let i = 1; i <= CHANNELS.length; i++) {
+  const idxs = filteredIndices();
+  log(`🧪 Probando ${idxs.length} canales del filtro actual`, 'info');
+  const results = {};
+  for (const i of idxs) {
     current = i;
     await playCurrent();
-    // playCurrent ya esperó la confirmación de 'playing' o el timeout
     const works = player.readyState >= 2 && !player.error && !player.paused;
-    selector.options[i-1].textContent = CHANNELS[i-1].label + (works ? ' ✅' : ' ❌');
-    log(`Canal ${i}: ${works ? 'OK' : 'falla'}`, works ? 'success' : 'error');
+    results[i] = works;
+    log(`${CHANNELS[i].label}: ${works ? 'OK ✅' : 'falla ❌'}`, works ? 'success' : 'error');
   }
+  // marcar en selector
+  [...selector.options].forEach(opt => {
+    const i = parseInt(opt.value);
+    if (i in results) opt.textContent = CHANNELS[i].label + (results[i] ? ' ✅' : ' ❌');
+  });
   log('🧪 Prueba finalizada', 'info');
   showNotification('Prueba completada', 'success');
   btn.disabled = false;
-  btn.innerHTML = '🧪 Probar todos';
+  btn.innerHTML = '🧪 Probar';
   isTesting = false;
-  current = 1;
-  playCurrent();
+  const firstOk = idxs.find(i => results[i]);
+  if (firstOk !== undefined) { current = firstOk; playCurrent(); }
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'SELECT') return;
+  if (['SELECT','INPUT'].includes(e.target.tagName)) return;
   if (e.key === 'ArrowRight') { consecutiveFails = 0; next(); }
   if (e.key === 'ArrowLeft')  { consecutiveFails = 0; prev(); }
   if (e.key === ' ') { e.preventDefault(); player.paused ? player.play() : player.pause(); }
@@ -674,18 +846,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'f') document.documentElement.requestFullscreen();
 });
 
-// Inicializar selector
-CHANNELS.forEach((c, i) => {
-  const opt = document.createElement('option');
-  opt.value = i + 1;
-  opt.textContent = c.label;
-  selector.appendChild(opt);
-});
-selector.value = current;
+rebuildCats();
+rebuildSelector();
 
 setInterval(() => $('#clock').textContent = new Date().toLocaleTimeString(), 1000);
 
-// Footer dinámico
 $('#footer').textContent = `© ${new Date().getFullYear()} Luis Cartes Henríquez · Creación original protegida — Convenio de Berna / OMPI · Prohibida su reproducción, adaptación o uso en entrenamiento de IA sin autorización expresa.`;
 
 playCurrent();
