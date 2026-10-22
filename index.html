@@ -53,7 +53,7 @@ select,input{padding:9px 12px}input[type=search]{flex:1;min-width:190px}
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand"><h1>📡 TV V∞ Live</h1><p>36 canales · fallbacks · M3U · búsqueda · prueba automática</p></div>
+    <div class="brand"><h1>📡 TV V∞ Live</h1><p>36 canales + listas iptv-org · fallbacks · M3U · búsqueda · prueba automática</p></div>
     <div class="pill" id="clock">--:--:--</div>
   </header>
   <main class="main">
@@ -96,6 +96,11 @@ select,input{padding:9px 12px}input[type=search]{flex:1;min-width:190px}
       </div>
       <div class="list" id="list"></div>
       <div class="tools">
+        <div class="card">
+          <h3>Listas en línea (iptv-org)</h3>
+          <div class="row" id="remoteBtns"></div>
+          <div class="now-sub" id="remoteInfo" style="margin-top:6px">Se cargan desde internet y se recargan solas al abrir.</div>
+        </div>
         <div class="card m3u">
           <h3>Importar M3U temporal</h3>
           <textarea id="m3uText" placeholder="#EXTM3U&#10;#EXTINF:-1 group-title=&quot;Mi Cat&quot;,Mi Canal&#10;https://.../playlist.m3u8"></textarea>
@@ -256,12 +261,77 @@ function loadChannels() {
   try { return JSON.parse(localStorage.getItem('tvv_channels')) || DEFAULT_CHANNELS; }
   catch(e) { return DEFAULT_CHANNELS; }
 }
-function saveChannels() { localStorage.setItem('tvv_channels', JSON.stringify(channels)); }
+function saveChannels() {
+  // Las listas en línea no se guardan (la mundial supera el límite del navegador); se recargan al abrir.
+  try { localStorage.setItem('tvv_channels', JSON.stringify(channels.filter(c => !c.remote))); } catch(e) {}
+}
+
+// ── Listas en línea (iptv-org) ──────────────────────────────────
+const REMOTE_LISTS = [
+  {id:'cl',  name:'IPTV Chile',   url:'https://iptv-org.github.io/iptv/countries/cl.m3u'},
+  {id:'spa', name:'IPTV Español', url:'https://iptv-org.github.io/iptv/languages/spa.m3u'},
+  {id:'all', name:'IPTV Mundo',   url:'https://iptv-org.github.io/iptv/index.m3u'}
+];
+const RENDER_CAP = 400;
+function activeLists() {
+  try { return JSON.parse(localStorage.getItem('tvv_lists')) || []; } catch(e) { return []; }
+}
+function setActiveLists(a) { try { localStorage.setItem('tvv_lists', JSON.stringify(a)); } catch(e) {} }
+
+async function loadRemote(id, silent=false) {
+  const L = REMOTE_LISTS.find(x => x.id === id); if (!L) return;
+  const info = $('#remoteInfo');
+  info.textContent = 'Descargando '+L.name+'…';
+  try {
+    const r = await fetch(L.url, {cache:'no-cache'});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const all = parseM3U(await r.text());
+    // En una página https el navegador bloquea streams http://, así que se omiten.
+    const ok = all.filter(c => /^https:\/\//i.test(c.srcs[0]));
+    const seen = new Set();
+    const add = ok.filter(c => !seen.has(c.srcs[0]) && seen.add(c.srcs[0]))
+                  .map(c => ({cat:L.name, grp:c.cat, label:c.label, srcs:c.srcs, remote:id}));
+    const keep = channels[current];
+    channels = channels.filter(c => c.remote !== id).concat(add);
+    const ni = channels.indexOf(keep); if (ni >= 0) current = ni;
+    const act = activeLists(); if (!act.includes(id)) { act.push(id); setActiveLists(act); }
+    info.textContent = L.name+': '+add.length+' canales ('+(all.length-ok.length)+' http omitidos).';
+    log(L.name+' cargada: '+add.length+' canales', 'ok');
+    if (!silent) { cat = L.name; localStorage.setItem('tvv_cat', cat); toast(add.length+' canales · '+L.name); }
+    render(); renderRemoteBtns();
+  } catch(e) {
+    info.textContent = 'No se pudo cargar '+L.name+' ('+e.message+').';
+    log('Fallo lista '+L.name+': '+e.message, 'bad');
+  }
+}
+function unloadRemote(id) {
+  const L = REMOTE_LISTS.find(x => x.id === id);
+  const keep = channels[current];
+  channels = channels.filter(c => c.remote !== id);
+  const ni = channels.indexOf(keep); current = ni >= 0 ? ni : 0;
+  setActiveLists(activeLists().filter(x => x !== id));
+  if (cat === L.name) cat = 'Todos';
+  $('#remoteInfo').textContent = L.name+' quitada.';
+  render(); renderRemoteBtns();
+}
+function renderRemoteBtns() {
+  const box = $('#remoteBtns'); box.innerHTML = '';
+  REMOTE_LISTS.forEach(L => {
+    const on = channels.some(c => c.remote === L.id);
+    const b = document.createElement('button');
+    b.className = on ? 'good' : '';
+    b.textContent = (on ? '✓ ' : '⬇ ')+L.name;
+    b.title = on ? 'Toca para quitar' : 'Toca para cargar';
+    b.onclick = () => on ? unloadRemote(L.id) : loadRemote(L.id);
+    box.appendChild(b);
+  });
+}
 function cats() { return ['Todos', ...Array.from(new Set(channels.map(c => c.cat || 'Sin categoría'))).sort()]; }
 function visible() {
   const q = query.toLowerCase();
   return channels.map((c,i) => ({c,i}))
-    .filter(x => (cat === 'Todos' || x.c.cat === cat) && x.c.label.toLowerCase().includes(q))
+    .filter(x => (cat === 'Todos' || x.c.cat === cat) &&
+      (x.c.label.toLowerCase().includes(q) || (x.c.grp||'').toLowerCase().includes(q)))
     .map(x => x.i);
 }
 
@@ -444,14 +514,22 @@ function renderTabs() {
 function renderList() {
   const v = visible(); list.innerHTML = '';
   if (!v.length) { list.innerHTML = '<div style="padding:16px;color:var(--muted)">Sin canales visibles.</div>'; return; }
-  v.forEach(i => {
+  const frag = document.createDocumentFragment();
+  v.slice(0, RENDER_CAP).forEach(i => {
     const c = channels[i];
     const b = document.createElement('button');
     b.className = 'ch'+(i === current ? ' active' : '');
-    b.innerHTML = '<span>'+escapeHtml(c.label)+'</span><span class="tag">'+escapeHtml(c.cat||'')+'</span>';
+    b.innerHTML = '<span>'+escapeHtml(c.label)+'</span><span class="tag">'+escapeHtml(c.grp||c.cat||'')+'</span>';
     b.onclick = () => play(i);
-    list.appendChild(b);
+    frag.appendChild(b);
   });
+  list.appendChild(frag);
+  if (v.length > RENDER_CAP) {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:12px;color:var(--muted);font-size:.8rem';
+    d.textContent = 'Mostrando '+RENDER_CAP+' de '+v.length+'. Usa el buscador (nombre o tema: news, sports, kids…).';
+    list.appendChild(d);
+  }
 }
 function render() { renderTabs(); renderList(); }
 function escapeHtml(s) {
@@ -507,7 +585,7 @@ $('#loadM3U').onclick = () => {
 };
 $('#resetChannels').onclick = () => {
   if (confirm('¿Restaurar lista original y borrar canales manuales?')) {
-    channels = DEFAULT_CHANNELS; saveChannels();
+    channels = DEFAULT_CHANNELS.concat(channels.filter(c => c.remote)); saveChannels();
     cat = 'Todos'; current = 0; render(); play(0);
   }
 };
@@ -515,6 +593,9 @@ $('#testVisible').onclick = async () => {
   if (testing) return;
   testing = true; $('#testVisible').disabled = true;
   const v = visible();
+  if (v.length > 60 && !confirm('Hay '+v.length+' canales visibles; probarlos puede tardar mucho. ¿Continuar?')) {
+    testing = false; $('#testVisible').disabled = false; return;
+  }
   log('Probando '+v.length+' canales visibles');
   for (const i of v) {
     current = i; renderList();
@@ -541,8 +622,10 @@ setInterval(() => $('#clock').textContent = new Date().toLocaleTimeString(), 100
 $('#footer').textContent = '© '+new Date().getFullYear()+' Luis Cartes Henríquez · Creación original protegida — Convenio de Berna / OMPI · Prohibida su reproducción, adaptación o uso en entrenamiento de IA sin autorización expresa.';
 
 render();
+renderRemoteBtns();
 if (current >= channels.length) current = 0;
 play(current);
+activeLists().forEach(id => loadRemote(id, true));
 </script>
 </body>
 </html>
